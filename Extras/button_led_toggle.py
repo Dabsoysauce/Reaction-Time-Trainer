@@ -9,6 +9,11 @@ import time
 import RPi.GPIO as GPIO
 
 
+# Set this to True to print what the button is doing.
+# Set it to False once everything works.
+DEBUG = True
+
+
 # GPIO Mode (BOARD / BCM)
 GPIO.setmode(GPIO.BCM)
 
@@ -27,32 +32,65 @@ GPIO.setup(BtnPin, GPIO.IN, pull_up_down = GPIO.PUD_UP)
 LedOn = False
 GPIO.output(LedPin, GPIO.LOW)
 
+# Remember what the button read last time round the loop, so we can spot
+# the moment it changes instead of reacting the whole time it is held
+LastBtn = GPIO.input(BtnPin)
+LastChangeTime = 0
+DebounceTime = 0.05
+
+# Used by the debug heartbeat below
+LastHeartbeat = 0
+
 
 try:
     print("Press CTRL+C to end the program.")
 
+    if (DEBUG):
+        print("DEBUG is on. Idle should read 1, pressed should read 0.")
+        print("Button currently reads " + str(LastBtn))
+
     while True:
 
-        # The button pin reads 0 while the button is being held down
-        if (GPIO.input(BtnPin) == 0):
+        # Check the current time
+        currentTime = time.time()
 
-            # Wait until the button is released, so holding it down
-            # only counts as a single click
-            while (GPIO.input(BtnPin) == 0):
-                time.sleep(0.01)
+        # Read the button. It reads 0 while it is being held down.
+        Btn = GPIO.input(BtnPin)
 
-            # Flip the LED to the opposite of what it was
-            LedOn = not LedOn
+        # Has the button changed since last time round the loop?
+        # The time check ignores the mechanical bouncing of the contacts.
+        if (Btn != LastBtn) and (currentTime - LastChangeTime > DebounceTime):
 
-            if (LedOn):
-                GPIO.output(LedPin, GPIO.HIGH)
-                print("LED on")
+            LastChangeTime = currentTime
+            LastBtn = Btn
+
+            if (Btn == 0):
+                if (DEBUG):
+                    print("Button pressed")
+
+                # Flip the LED to the opposite of what it was
+                LedOn = not LedOn
+
+                if (LedOn):
+                    GPIO.output(LedPin, GPIO.HIGH)
+                    print("LED on")
+                else:
+                    GPIO.output(LedPin, GPIO.LOW)
+                    print("LED off")
+
             else:
-                GPIO.output(LedPin, GPIO.LOW)
-                print("LED off")
+                if (DEBUG):
+                    print("Button released")
 
-            # Short pause so the switch bouncing is not read as extra clicks
-            time.sleep(0.05)
+        # Every second, print the raw pin reading.
+        # If this stays at 0 after you let go of the button, the problem is
+        # the wiring, not the program.
+        if (DEBUG) and (currentTime - LastHeartbeat > 1.0):
+            LastHeartbeat = currentTime
+            print("  [debug] button pin = " + str(Btn) + ", LedOn = " + str(LedOn))
+
+        # Small pause so the loop does not hog the processor
+        time.sleep(0.01)
 
 # Quit the program when the user presses CTRL + C
 except KeyboardInterrupt:
