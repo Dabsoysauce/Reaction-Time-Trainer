@@ -104,9 +104,15 @@ def lcd_send_byte(bits, mode):
 
 
 def lcd_init():
+    # The display needs time to settle after power is applied before it
+    # will accept any commands
+    time.sleep(0.05)
+
     # This wake up sequence is what the HD44780 datasheet asks for
     lcd_send_byte(0x33, LCD_COMMAND)        # Initialise
+    time.sleep(0.005)
     lcd_send_byte(0x32, LCD_COMMAND)        # Switch to 4-bit mode
+    time.sleep(0.005)
     lcd_send_byte(0x28, LCD_COMMAND)        # Two lines, 5x8 dot characters
     lcd_send_byte(0x0C, LCD_COMMAND)        # Display on, cursor off
     lcd_send_byte(0x06, LCD_COMMAND)        # Move the cursor right after typing
