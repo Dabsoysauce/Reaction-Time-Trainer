@@ -15,17 +15,21 @@ import RPi.GPIO as GPIO
 #   2  VDD         to        5V
 #   3  V0          to        middle leg of a 10k potentiometer
 #                            (outer legs go to 5V and GND; this sets contrast)
-#   4  RS          to        GPIO 26
+#   4  RS          to        GPIO 26 (physical pin 37)
 #   5  RW          to        GND        <-- important, see the warning below
-#   6  E           to        GPIO 19
+#   6  E           to        GPIO 19 (physical pin 35)
 #   7  D0          to        not connected
 #   8  D1          to        not connected
 #   9  D2          to        not connected
 #  10  D3          to        not connected
-#  11  D4          to        GPIO 13
-#  12  D5          to        GPIO 6
-#  13  D6          to        GPIO 5
-#  14  D7          to        GPIO 21
+#  11  D4          to        GPIO 13 (physical pin 33)
+#  12  D5          to        GPIO 6  (physical pin 31)
+#  13  D6          to        GPIO 5  (physical pin 29)
+#  14  D7          to        GPIO 21 (physical pin 40)
+#
+# The GPIO numbers above are BCM numbers, because this program calls
+# GPIO.setmode(GPIO.BCM). They are NOT the same as counting along the
+# header. Use the physical pin numbers in brackets to find them.
 #  15  A           to        5V through a 220 ohm resistor (backlight)
 #  16  K           to        GND                           (backlight)
 #
