@@ -1,3 +1,9 @@
+# This program is a reaction game for a 16x2 LCD display and four buttons.
+# The display asks for a colour, and you have to press the matching button
+# within one second. You get a point for each correct press that is quick
+# enough, and the game lasts 10 rounds.
+
+
 # General libraries
 import time
 import random
@@ -20,12 +26,32 @@ import RPi.GPIO as GPIO
 #  15  A           to        5V through a 220 ohm resistor
 #  16  K           to        GND
 #
-# Connect the two buttons to the following pins
+# Connect the four buttons to the following pins
 #     Button                 RPI
 #   yellow, one leg      to  GPIO 20 (physical pin 38)
 #   yellow, diagonal leg to  GND     (physical pin 39)
 #   blue, one leg        to  GPIO 16 (physical pin 36)
 #   blue, diagonal leg   to  GND     (physical pin 34)
+#   green, one leg       to  GPIO 12 (physical pin 32)
+#   green, diagonal leg  to  GND     (physical pin 30)
+#   red, one leg         to  GPIO 25 (physical pin 22)
+#   red, diagonal leg    to  GND     (physical pin 20)
+#
+# The yellow and blue buttons do not move. Each new button follows the same
+# pattern as the first two: one leg in a GPIO pin, and the diagonal leg in
+# the ground pin next door to it.
+#
+# The two legs of each button must be diagonally opposite each other. The
+# legs along each side of a tactile switch are joined together inside the
+# switch, so using two from the same side leaves it permanently closed.
+#
+# No resistors are needed for the buttons. The internal pull-ups hold the
+# pins high, and pressing a button pulls its pin down to ground.
+#
+# The GPIO numbers above are BCM numbers, because this program calls
+# GPIO.setmode(GPIO.BCM). They are NOT the same as counting along the
+# header. Use the physical pin numbers in brackets to find them.
+
 
 # GPIO Mode (BOARD / BCM)
 GPIO.setmode(GPIO.BCM)
@@ -37,8 +63,15 @@ LcdD4 = 13
 LcdD5 = 6
 LcdD6 = 5
 LcdD7 = 21
-BtnYellow = 20
-BtnBlue = 16
+
+# Each entry pairs a colour with the pin that button is wired to.
+# To add another button, wire it up and add one line here.
+Buttons = [
+    ("YELLOW", 20),
+    ("BLUE", 16),
+    ("GREEN", 12),
+    ("RED", 25),
+]
 
 # Set GPIO direction (IN / OUT)
 GPIO.setup(LcdRS, GPIO.OUT)
@@ -48,9 +81,9 @@ GPIO.setup(LcdD5, GPIO.OUT)
 GPIO.setup(LcdD6, GPIO.OUT)
 GPIO.setup(LcdD7, GPIO.OUT)
 
-# Set the button pins as inputs, and pull them up to high level (3.3V)
-GPIO.setup(BtnYellow, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-GPIO.setup(BtnBlue, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+# Set every button pin as an input, and pull it up to high level (3.3V)
+for colour, pin in Buttons:
+    GPIO.setup(pin, GPIO.IN, pull_up_down = GPIO.PUD_UP)
 
 
 # The display treats a byte as a command when RS is low,
@@ -144,7 +177,7 @@ def lcd_string(message, line):
 
 
 def wait_for_press(timeout):
-    # Wait until one of the two buttons is pressed, and return its colour.
+    # Wait until one of the buttons is pressed, and return its colour.
     # If nothing is pressed within timeout seconds, give up and return an
     # empty string instead.
 
@@ -153,25 +186,24 @@ def wait_for_press(timeout):
     # Read the buttons first, so that a button which is already being held
     # down when the round starts does not count. We are looking for the
     # moment a pin changes from high to low, not for it simply being low.
-    LastYellow = GPIO.input(BtnYellow)
-    LastBlue = GPIO.input(BtnBlue)
+    LastState = {}
+    for colour, pin in Buttons:
+        LastState[colour] = GPIO.input(pin)
 
     while True:
         # Has the player run out of time?
         if (time.time() - startTime > timeout):
             return ""
 
-        Yellow = GPIO.input(BtnYellow)
-        Blue = GPIO.input(BtnBlue)
+        # Check every button in turn
+        for colour, pin in Buttons:
+            state = GPIO.input(pin)
 
-        # Has either button just gone from released to pressed?
-        if (Yellow == 0) and (LastYellow == 1):
-            return "YELLOW"
-        if (Blue == 0) and (LastBlue == 1):
-            return "BLUE"
+            # Has this button just gone from released to pressed?
+            if (state == 0) and (LastState[colour] == 1):
+                return colour
 
-        LastYellow = Yellow
-        LastBlue = Blue
+            LastState[colour] = state
 
         # Small pause so the loop does not hog the processor
         time.sleep(0.01)
@@ -194,11 +226,8 @@ try:
 
     for roundNumber in range(1, TOTAL_ROUNDS + 1):
 
-        # Pick a colour at random for this round
-        if (random.randint(0, 1) == 0):
-            target = "YELLOW"
-        else:
-            target = "BLUE"
+        # Pick one of the colours at random for this round
+        target = random.choice(Buttons)[0]
 
         lcd_string("Round " + str(roundNumber) + " of " + str(TOTAL_ROUNDS), LCD_LINE_1)
         lcd_string("Press " + target, LCD_LINE_2)
