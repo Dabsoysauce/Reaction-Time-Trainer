@@ -1,9 +1,3 @@
-# This program is a reaction game for a 16x2 LCD display and two buttons.
-# The display asks for a colour, and you have to press the matching button
-# within one second. You get a point for each correct press that is quick
-# enough, and the game lasts 10 rounds.
-
-
 # General libraries
 import time
 import random
@@ -32,21 +26,6 @@ import RPi.GPIO as GPIO
 #   yellow, diagonal leg to  GND     (physical pin 39)
 #   blue, one leg        to  GPIO 16 (physical pin 36)
 #   blue, diagonal leg   to  GND     (physical pin 34)
-#
-# The yellow button does not move. The blue button goes in the two pins
-# next door to it.
-#
-# The two legs of each button must be diagonally opposite each other. The
-# legs along each side of a tactile switch are joined together inside the
-# switch, so using two from the same side leaves it permanently closed.
-#
-# No resistors are needed for the buttons. The internal pull-ups hold the
-# pins high, and pressing a button pulls its pin down to ground.
-#
-# The GPIO numbers above are BCM numbers, because this program calls
-# GPIO.setmode(GPIO.BCM). They are NOT the same as counting along the
-# header. Use the physical pin numbers in brackets to find them.
-
 
 # GPIO Mode (BOARD / BCM)
 GPIO.setmode(GPIO.BCM)
