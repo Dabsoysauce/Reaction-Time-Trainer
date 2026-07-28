@@ -126,6 +126,10 @@ pwm_frequency = 50
 STATE_DOWN = 0          # servo is at 0 degrees, waiting for the red button
 STATE_UP = 1            # servo is at 85 degrees, waiting for the yellow button
 
+# Set this to True to print what the buttons are doing.
+# Set it to False once everything works.
+DEBUG = True
+
 
 # Helper function
 def set_duty_servo(angle):
@@ -239,6 +243,13 @@ try:
     LastChangeTime = 0
     DebounceTime = 0.05
 
+    # Used by the debug heartbeat below
+    LastHeartbeat = 0
+
+    if (DEBUG):
+        print("DEBUG is on. Idle should read 1, pressed should read 0.")
+        print("Red reads " + str(LastRed) + ", yellow reads " + str(LastYellow))
+
     while True:
 
         # Check the current time
@@ -303,6 +314,13 @@ try:
         else:
             print("Error: unrecognized state")
             break
+
+        # Every second, print the raw pin readings.
+        # Press and hold the yellow button while watching this. If the
+        # yellow number never changes, the problem is the wiring.
+        if (DEBUG) and (currentTime - LastHeartbeat > 1.0):
+            LastHeartbeat = currentTime
+            print("  [debug] red = " + str(Red) + ", yellow = " + str(Yellow) + ", state = " + str(state))
 
         # Small pause so the loop does not hog the processor
         time.sleep(0.01)
