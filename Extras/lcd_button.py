@@ -1,10 +1,11 @@
-# This program shows a message on a 16x2 LCD display when a button
-# is pressed, and counts how many times it has been pressed.
-# It combines lcd_1602.py and button_led_toggle.py
+# This program is a reaction game for a 16x2 LCD display and two buttons.
+# The display asks for a colour, and you have to press the matching button.
+# You get a point for each correct press, and the game lasts 10 rounds.
 
 
 # General libraries
 import time
+import random
 # Libraries for the GPIO pins
 import RPi.GPIO as GPIO
 
@@ -24,17 +25,22 @@ import RPi.GPIO as GPIO
 #  15  A           to        5V through a 220 ohm resistor
 #  16  K           to        GND
 #
-# Connect the button to the following pins
-#     Button leg            RPI
-#   one leg       to        GPIO 20 (physical pin 38)
-#   diagonal leg  to        GND     (physical pin 39)
+# Connect the two buttons to the following pins
+#     Button                 RPI
+#   yellow, one leg      to  GPIO 20 (physical pin 38)
+#   yellow, diagonal leg to  GND     (physical pin 39)
+#   blue, one leg        to  GPIO 16 (physical pin 36)
+#   blue, diagonal leg   to  GND     (physical pin 34)
 #
-# The two button legs must be diagonally opposite each other. The legs
-# along each side of a tactile switch are joined together inside the
+# The yellow button does not move. The blue button goes in the two pins
+# next door to it.
+#
+# The two legs of each button must be diagonally opposite each other. The
+# legs along each side of a tactile switch are joined together inside the
 # switch, so using two from the same side leaves it permanently closed.
 #
-# No resistor is needed for the button. The internal pull-up holds the
-# pin high, and pressing the button pulls it down to ground.
+# No resistors are needed for the buttons. The internal pull-ups hold the
+# pins high, and pressing a button pulls its pin down to ground.
 #
 # The GPIO numbers above are BCM numbers, because this program calls
 # GPIO.setmode(GPIO.BCM). They are NOT the same as counting along the
@@ -51,7 +57,8 @@ LcdD4 = 13
 LcdD5 = 6
 LcdD6 = 5
 LcdD7 = 21
-BtnPin = 20
+BtnYellow = 20
+BtnBlue = 16
 
 # Set GPIO direction (IN / OUT)
 GPIO.setup(LcdRS, GPIO.OUT)
@@ -61,8 +68,9 @@ GPIO.setup(LcdD5, GPIO.OUT)
 GPIO.setup(LcdD6, GPIO.OUT)
 GPIO.setup(LcdD7, GPIO.OUT)
 
-# Set BtnPin as input, and pull up to high level (3.3V)
-GPIO.setup(BtnPin, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+# Set the button pins as inputs, and pull them up to high level (3.3V)
+GPIO.setup(BtnYellow, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+GPIO.setup(BtnBlue, GPIO.IN, pull_up_down = GPIO.PUD_UP)
 
 
 # The display treats a byte as a command when RS is low,
@@ -80,6 +88,9 @@ LCD_WIDTH = 16
 # How long to hold the enable pin, in seconds
 E_PULSE = 0.0005
 E_DELAY = 0.0005
+
+# How many rounds the game lasts
+TOTAL_ROUNDS = 10
 
 
 def lcd_toggle_enable():
@@ -148,51 +159,81 @@ def lcd_string(message, line):
         lcd_send_byte(ord(message[i]), LCD_CHARACTER)
 
 
+def wait_for_press():
+    # Wait until one of the two buttons is pressed, and return its colour.
+
+    # Read the buttons first, so that a button which is already being held
+    # down when the round starts does not count. We are looking for the
+    # moment a pin changes from high to low, not for it simply being low.
+    LastYellow = GPIO.input(BtnYellow)
+    LastBlue = GPIO.input(BtnBlue)
+
+    while True:
+        Yellow = GPIO.input(BtnYellow)
+        Blue = GPIO.input(BtnBlue)
+
+        # Has either button just gone from released to pressed?
+        if (Yellow == 0) and (LastYellow == 1):
+            return "YELLOW"
+        if (Blue == 0) and (LastBlue == 1):
+            return "BLUE"
+
+        LastYellow = Yellow
+        LastBlue = Blue
+
+        # Small pause so the loop does not hog the processor
+        time.sleep(0.01)
+
+
 try:
     print("Press CTRL+C to end the program.")
 
     lcd_init()
-    lcd_string("Press the button", LCD_LINE_1)
-    lcd_string("Presses: 0", LCD_LINE_2)
 
-    # Count how many times the button has been pressed
-    counter = 0
+    lcd_string("Colour game!", LCD_LINE_1)
+    lcd_string("Get ready...", LCD_LINE_2)
+    time.sleep(2)
 
-    # Remember what the button read last time round the loop, so we can spot
-    # the moment it changes instead of reacting the whole time it is held
-    LastBtn = GPIO.input(BtnPin)
-    LastChangeTime = 0
-    DebounceTime = 0.05
+    score = 0
 
+    for roundNumber in range(1, TOTAL_ROUNDS + 1):
+
+        # Pick a colour at random for this round
+        if (random.randint(0, 1) == 0):
+            target = "YELLOW"
+        else:
+            target = "BLUE"
+
+        lcd_string("Round " + str(roundNumber) + " of " + str(TOTAL_ROUNDS), LCD_LINE_1)
+        lcd_string("Press " + target, LCD_LINE_2)
+        print("Round " + str(roundNumber) + ": press " + target)
+
+        # Wait here until the player presses one of the buttons
+        pressed = wait_for_press()
+
+        # Whether they were right or wrong, the round is over either way
+        if (pressed == target):
+            score = score + 1
+            lcd_string("Correct!  +1", LCD_LINE_1)
+            print("Correct. Score is now " + str(score))
+        else:
+            lcd_string("WRONG!", LCD_LINE_1)
+            print("Wrong, that was " + pressed + ". Score is still " + str(score))
+
+        lcd_string("Score: " + str(score), LCD_LINE_2)
+
+        # Hold the result on screen long enough to read it. This also gives
+        # the button contacts time to stop bouncing before the next round.
+        time.sleep(1.5)
+
+    # The game is over, so show the final score
+    lcd_string("Final score", LCD_LINE_1)
+    lcd_string(str(score) + " out of " + str(TOTAL_ROUNDS), LCD_LINE_2)
+    print("Final score: " + str(score) + " out of " + str(TOTAL_ROUNDS))
+
+    # Leave the score on the display until CTRL + C is pressed
     while True:
-
-        # Check the current time
-        currentTime = time.time()
-
-        # Read the button. It reads 0 while it is being held down.
-        Btn = GPIO.input(BtnPin)
-
-        # Has the button changed since last time round the loop?
-        # The time check ignores the mechanical bouncing of the contacts.
-        if (Btn != LastBtn) and (currentTime - LastChangeTime > DebounceTime):
-
-            LastChangeTime = currentTime
-            LastBtn = Btn
-
-            if (Btn == 0):
-                counter = counter + 1
-                print("Button pressed. Count is " + str(counter))
-
-                lcd_string("Button pressed!", LCD_LINE_1)
-                lcd_string("Presses: " + str(counter), LCD_LINE_2)
-
-            else:
-                print("Button released")
-
-                lcd_string("Press the button", LCD_LINE_1)
-
-        # Small pause so the loop does not hog the processor
-        time.sleep(0.01)
+        time.sleep(0.1)
 
 # Quit the program when the user presses CTRL + C
 except KeyboardInterrupt:
