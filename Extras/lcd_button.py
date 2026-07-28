@@ -1,6 +1,7 @@
 # This program is a reaction game for a 16x2 LCD display and two buttons.
-# The display asks for a colour, and you have to press the matching button.
-# You get a point for each correct press, and the game lasts 10 rounds.
+# The display asks for a colour, and you have to press the matching button
+# within one second. You get a point for each correct press that is quick
+# enough, and the game lasts 10 rounds.
 
 
 # General libraries
@@ -92,6 +93,10 @@ E_DELAY = 0.0005
 # How many rounds the game lasts
 TOTAL_ROUNDS = 10
 
+# How long the player has to press the button, in seconds.
+# A press after this does not count, even if it is the right button.
+TIME_LIMIT = 1.0
+
 
 def lcd_toggle_enable():
     # The display reads the data pins on the falling edge of the enable pin,
@@ -159,8 +164,12 @@ def lcd_string(message, line):
         lcd_send_byte(ord(message[i]), LCD_CHARACTER)
 
 
-def wait_for_press():
+def wait_for_press(timeout):
     # Wait until one of the two buttons is pressed, and return its colour.
+    # If nothing is pressed within timeout seconds, give up and return an
+    # empty string instead.
+
+    startTime = time.time()
 
     # Read the buttons first, so that a button which is already being held
     # down when the round starts does not count. We are looking for the
@@ -169,6 +178,10 @@ def wait_for_press():
     LastBlue = GPIO.input(BtnBlue)
 
     while True:
+        # Has the player run out of time?
+        if (time.time() - startTime > timeout):
+            return ""
+
         Yellow = GPIO.input(BtnYellow)
         Blue = GPIO.input(BtnBlue)
 
@@ -194,6 +207,10 @@ try:
     lcd_string("Get ready...", LCD_LINE_2)
     time.sleep(2)
 
+    lcd_string("You have " + str(TIME_LIMIT) + "s", LCD_LINE_1)
+    lcd_string("for each round", LCD_LINE_2)
+    time.sleep(2)
+
     score = 0
 
     for roundNumber in range(1, TOTAL_ROUNDS + 1):
@@ -208,14 +225,22 @@ try:
         lcd_string("Press " + target, LCD_LINE_2)
         print("Round " + str(roundNumber) + ": press " + target)
 
-        # Wait here until the player presses one of the buttons
-        pressed = wait_for_press()
+        # Wait here until the player presses one of the buttons, or until
+        # they run out of time. Note the time just before we start waiting,
+        # so we can work out how quick they were.
+        startTime = time.time()
+        pressed = wait_for_press(TIME_LIMIT)
+        reactionTime = time.time() - startTime
 
-        # Whether they were right or wrong, the round is over either way
-        if (pressed == target):
+        # The round is over either way, whether they were right, wrong,
+        # or too slow
+        if (pressed == ""):
+            lcd_string("TOO SLOW!", LCD_LINE_1)
+            print("Too slow. Score is still " + str(score))
+        elif (pressed == target):
             score = score + 1
-            lcd_string("Correct!  +1", LCD_LINE_1)
-            print("Correct. Score is now " + str(score))
+            lcd_string("Correct! " + str(round(reactionTime, 2)) + "s", LCD_LINE_1)
+            print("Correct in " + str(round(reactionTime, 2)) + "s. Score is now " + str(score))
         else:
             lcd_string("WRONG!", LCD_LINE_1)
             print("Wrong, that was " + pressed + ". Score is still " + str(score))
